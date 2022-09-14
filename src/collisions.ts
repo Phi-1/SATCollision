@@ -49,7 +49,7 @@ class RectangularHitbox {
         this.height = height
     }
 
-    get vertices(): Vector2[] {
+    vertices(): Vector2[] {
         const vertices = []
         for (let i = 0; i < this._vertices.length; i++) {
             const vscaled = new Vector2(this._vertices[i].x * this.width, this._vertices[i].y * this.height)
@@ -81,24 +81,26 @@ function satCollision(a: RectangularHitbox, b: RectangularHitbox): boolean {
     // for each rectangle, calculate edges
     const aEdges: Vector2[] = []
     const bEdges: Vector2[] = []
+    const aVertices = a.vertices()
+    const bVertices = b.vertices()
     //a
-    for (let i = 0; i < a.vertices.length; i++) {
-        if (i === a.vertices.length - 1) {
-            const edge = new Vector2(a.vertices[0].x - a.vertices[i].x, a.vertices[0].y - a.vertices[i].y)
+    for (let i = 0; i < aVertices.length; i++) {
+        if (i === aVertices.length - 1) {
+            const edge = new Vector2(aVertices[0].x - aVertices[i].x, aVertices[0].y - aVertices[i].y)
             aEdges.push(edge)
             continue
         }
-        const edge = new Vector2(a.vertices[i+1].x - a.vertices[i].x, a.vertices[i+1].y - a.vertices[i].y)
+        const edge = new Vector2(aVertices[i+1].x - aVertices[i].x, aVertices[i+1].y - aVertices[i].y)
         aEdges.push(edge)
     }
     //b
-    for (let i = 0; i < b.vertices.length; i++) {
-        if (i === b.vertices.length - 1) {
-            const edge = new Vector2(b.vertices[0].x - b.vertices[i].x, b.vertices[0].y - b.vertices[i].y)
+    for (let i = 0; i < bVertices.length; i++) {
+        if (i === bVertices.length - 1) {
+            const edge = new Vector2(bVertices[0].x - bVertices[i].x, bVertices[0].y - bVertices[i].y)
             bEdges.push(edge)
             continue
         }
-        const edge = new Vector2(b.vertices[i+1].x - b.vertices[i].x, b.vertices[i+1].y - b.vertices[i].y)
+        const edge = new Vector2(bVertices[i+1].x - bVertices[i].x, bVertices[i+1].y - bVertices[i].y)
         bEdges.push(edge)
     }
     // for each perpendicular axis, project vertices
@@ -106,11 +108,31 @@ function satCollision(a: RectangularHitbox, b: RectangularHitbox): boolean {
         const axis = aEdges[i].perpendicular
         const aProjections: number[] = []
         const bProjections: number[] = []
-        for (let j = 0; j < a.vertices.length; j++) {
-            aProjections.push(Vector2.project(a.vertices[j], axis))
+        for (let j = 0; j < aVertices.length; j++) {
+            aProjections.push(Vector2.project(aVertices[j], axis))
         }
-        for (let j = 0; j < b.vertices.length; j++) {
-            bProjections.push(Vector2.project(b.vertices[j], axis))
+        for (let j = 0; j < bVertices.length; j++) {
+            bProjections.push(Vector2.project(bVertices[j], axis))
+        }
+        // check for gap or overlap
+        // if gap, there is no collision so return false
+        let maxA = Math.max(...aProjections)
+        let minA = Math.min(...aProjections)
+        let maxB = Math.max(...bProjections)
+        let minB = Math.min(...bProjections)
+        if (maxA < minB || maxB < minA) {
+            return false
+        }
+    }
+    for (let i = 0; i < bEdges.length; i++) {
+        const axis = bEdges[i].perpendicular
+        const aProjections: number[] = []
+        const bProjections: number[] = []
+        for (let j = 0; j < aVertices.length; j++) {
+            aProjections.push(Vector2.project(aVertices[j], axis))
+        }
+        for (let j = 0; j < bVertices.length; j++) {
+            bProjections.push(Vector2.project(bVertices[j], axis))
         }
         // check for gap or overlap
         // if gap, there is no collision so return false
@@ -125,28 +147,31 @@ function satCollision(a: RectangularHitbox, b: RectangularHitbox): boolean {
     return true
 }
 
-const statRect = new Entity(400, 400, 200, 100, 60)
-const movingRect = new Entity(0, 0, 100, 100, 45)
+const statRect = new Entity(900, 500, 200, 100, Math.floor(Math.random() * 360))
+const movingRect = new Entity(0, 0, 100, 100, Math.floor(Math.random() * 360))
 
 document.addEventListener("mousemove", (event: MouseEvent) => [movingRect.transform.pos.x, movingRect.transform.pos.y] = [event.offsetX, event.offsetY])
 
 export function update(dt: number) {
-    const p = new Path2D()
-    const sv = statRect.hitbox.vertices
-    const mv = movingRect.hitbox.vertices
-    p.moveTo(sv[sv.length-1].x, sv[sv.length-1].y)
+    const sv = statRect.hitbox.vertices()
+    const mv = movingRect.hitbox.vertices()
+    const p1 = new Path2D()
+    p1.moveTo(sv[sv.length-1].x, sv[sv.length-1].y)
     for (let i = sv.length - 1; i >= 0; i--) {
-        p.lineTo(sv[i].x, sv[i].y)
+        p1.lineTo(sv[i].x, sv[i].y)
     }
-    p.moveTo(mv[mv.length-1].x, mv[mv.length-1].y)
+    p1.closePath()
+    const p2 = new Path2D()
+    p2.moveTo(mv[mv.length-1].x, mv[mv.length-1].y)
     for (let i = mv.length - 1; i >= 0; i--) {
-        p.lineTo(mv[i].x, mv[i].y)
+        p2.lineTo(mv[i].x, mv[i].y)
     }
-    p.closePath()
+    p2.closePath()
     const colliding = satCollision(statRect.hitbox, movingRect.hitbox)
     engine.graphics.strokeStyle = colliding ? "red": "grey"
     engine.graphics.lineWidth = 1
-    engine.graphics.stroke(p)
+    engine.graphics.stroke(p1)
+    engine.graphics.stroke(p2)
     engine.graphics.strokeStyle = "blue"
     engine.graphics.fillRect(statRect.transform.pos.x-2, statRect.transform.pos.y-2, 4, 4)
     engine.graphics.fillRect(movingRect.transform.pos.x-2, movingRect.transform.pos.y-2, 4, 4)
